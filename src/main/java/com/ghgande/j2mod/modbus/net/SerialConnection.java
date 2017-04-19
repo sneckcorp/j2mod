@@ -15,8 +15,13 @@
  */
 package com.ghgande.j2mod.modbus.net;
 
-import com.fazecast.jSerialComm.SerialPort;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+
 import com.ghgande.j2mod.modbus.Modbus;
+import com.ghgande.j2mod.modbus.SerialPort;
+import com.ghgande.j2mod.modbus.SerialPortFactory;
 import com.ghgande.j2mod.modbus.io.AbstractModbusTransport;
 import com.ghgande.j2mod.modbus.io.ModbusASCIITransport;
 import com.ghgande.j2mod.modbus.io.ModbusRTUTransport;
@@ -24,9 +29,6 @@ import com.ghgande.j2mod.modbus.io.ModbusSerialTransport;
 import com.ghgande.j2mod.modbus.util.SerialParameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.io.InputStream;
 
 /**
  * Class that implements a serial connection which can be used for master and
@@ -45,6 +47,7 @@ public class SerialConnection extends AbstractSerialConnection {
     private ModbusSerialTransport transport;
     private SerialPort serialPort;
     private InputStream inputStream;
+    private OutputStream outputStream;
     private int timeout = Modbus.DEFAULT_TIMEOUT;
 
     /**
@@ -71,11 +74,13 @@ public class SerialConnection extends AbstractSerialConnection {
      * @return JSerialComm implementation
      */
     public static AbstractSerialConnection getCommPort(String commPort) {
-        SerialConnection jSerialCommPort = new SerialConnection();
-        jSerialCommPort.serialPort = SerialPort.getCommPort(commPort);
-        return jSerialCommPort;
+        SerialConnection connection = new SerialConnection();
+        try {
+            connection.serialPort = SerialPortFactory.create();
+        } catch (Exception ignored) {
+        }
+        return connection;
     }
-
 
     @Override
     public AbstractModbusTransport getModbusTransport() {
@@ -85,18 +90,25 @@ public class SerialConnection extends AbstractSerialConnection {
     @Override
     public boolean open() {
         if (serialPort == null) {
-            serialPort = SerialPort.getCommPort(parameters.getPortName());
+            try {
+                serialPort = SerialPortFactory.create();
+            } catch (Exception e) {
+                return false;
+            }
         }
-        serialPort.closePort();
+
+        try {
+            serialPort.close();
+        } catch (Exception ignored) {
+        }
+
         setConnectionParameters();
 
         if (Modbus.SERIAL_ENCODING_ASCII.equals(parameters.getEncoding())) {
             transport = new ModbusASCIITransport();
-        }
-        else if (Modbus.SERIAL_ENCODING_RTU.equals(parameters.getEncoding())) {
+        } else if (Modbus.SERIAL_ENCODING_RTU.equals(parameters.getEncoding())) {
             transport = new ModbusRTUTransport();
-        }
-        else {
+        } else {
             transport = new ModbusRTUTransport();
             logger.warn("Unknown transport encoding [{}] - reverting to RTU", parameters.getEncoding());
         }
@@ -107,18 +119,21 @@ public class SerialConnection extends AbstractSerialConnection {
         // open, close the port before throwing an exception.
         try {
             transport.setCommPort(this);
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
             e.printStackTrace();
             return false;
         }
 
-        // Open the port so that we can get it's input stream.
-        if (!serialPort.openPort()) {
+        try {
+            serialPort.open();
+        } catch (Exception e) {
             close();
             return false;
         }
+
         inputStream = serialPort.getInputStream();
+        outputStream = serialPort.getOutputStream();
+
         return true;
     }
 
@@ -129,8 +144,8 @@ public class SerialConnection extends AbstractSerialConnection {
         // to original state
 
         if (serialPort != null) {
-            serialPort.setComPortParameters(parameters.getBaudRate(), parameters.getDatabits(), parameters.getStopbits(), parameters.getParity());
-            serialPort.setFlowControl(parameters.getFlowControlIn() | parameters.getFlowControlOut());
+            serialPort.setSerialPortParams(parameters.getBaudRate(), parameters.getDatabits(), parameters.getStopbits(), parameters.getParity());
+            serialPort.setFlowControlMode(parameters.getFlowControlIn() | parameters.getFlowControlOut());
         }
     }
 
@@ -143,13 +158,17 @@ public class SerialConnection extends AbstractSerialConnection {
                 if (inputStream != null) {
                     inputStream.close();
                 }
-            }
-            catch (IOException e) {
+                if (outputStream != null) {
+                    outputStream.close();
+                }
+            } catch (IOException e) {
                 logger.debug(e.getMessage());
-            }
-            finally {
+            } finally {
                 // Close the port.
-                serialPort.closePort();
+                try {
+                    serialPort.close();
+                } catch (Exception ignore) {
+                }
             }
         }
         serialPort = null;
@@ -175,17 +194,30 @@ public class SerialConnection extends AbstractSerialConnection {
 
     @Override
     public int readBytes(byte[] buffer, long bytesToRead) {
-        return serialPort.readBytes(buffer, bytesToRead);
+        try {
+            return inputStream.read(buffer, 0, (int) bytesToRead);
+        } catch (IOException e) {
+            return -1;
+        }
     }
 
     @Override
     public int writeBytes(byte[] buffer, long bytesToWrite) {
-        return serialPort.writeBytes(buffer, bytesToWrite);
+        try {
+            outputStream.write(buffer, 0, (int) bytesToWrite);
+            return (int) bytesToWrite;
+        } catch (IOException e) {
+            return -1;
+        }
     }
 
     @Override
     public int bytesAvailable() {
-        return serialPort.bytesAvailable();
+        try {
+            return inputStream.available();
+        } catch (IOException e) {
+            return -1;
+        }
     }
 
     @Override
@@ -195,17 +227,17 @@ public class SerialConnection extends AbstractSerialConnection {
 
     @Override
     public void setBaudRate(int newBaudRate) {
-        serialPort.setBaudRate(newBaudRate);
+        serialPort.setSerialPortParams(newBaudRate, serialPort.getDataBits(), serialPort.getStopBits(), serialPort.getParity());
     }
 
     @Override
     public int getNumDataBits() {
-        return serialPort.getNumDataBits();
+        return serialPort.getDataBits();
     }
 
     @Override
     public int getNumStopBits() {
-        return serialPort.getNumStopBits();
+        return serialPort.getStopBits();
     }
 
     @Override
@@ -215,13 +247,11 @@ public class SerialConnection extends AbstractSerialConnection {
 
     @Override
     public String getDescriptivePortName() {
-        return serialPort.getDescriptivePortName();
+        return serialPort.getDeviceName();
     }
 
     @Override
     public void setComPortTimeouts(int newTimeoutMode, int newReadTimeout, int newWriteTimeout) {
-        if (serialPort != null) {
-            serialPort.setComPortTimeouts(newTimeoutMode, newReadTimeout, newWriteTimeout);
-        }
+
     }
 }
