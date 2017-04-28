@@ -54,7 +54,7 @@ public class SerialConnection extends AbstractSerialConnection {
      * Default constructor
      */
     public SerialConnection() {
-
+        this.parameters = new SerialParameters();
     }
 
     /**
@@ -75,8 +75,9 @@ public class SerialConnection extends AbstractSerialConnection {
      */
     public static AbstractSerialConnection getCommPort(String commPort) {
         SerialConnection connection = new SerialConnection();
+        connection.parameters.setPortName(commPort);
         try {
-            connection.serialPort = SerialPortFactory.create();
+            connection.serialPort = SerialPortFactory.create(connection.parameters.getPortName());
         } catch (Exception ignored) {
         }
         return connection;
@@ -91,18 +92,11 @@ public class SerialConnection extends AbstractSerialConnection {
     public boolean open() {
         if (serialPort == null) {
             try {
-                serialPort = SerialPortFactory.create();
+                serialPort = SerialPortFactory.create(parameters.getPortName());
             } catch (Exception e) {
                 return false;
             }
         }
-
-        try {
-            serialPort.close();
-        } catch (Exception ignored) {
-        }
-
-        setConnectionParameters();
 
         if (Modbus.SERIAL_ENCODING_ASCII.equals(parameters.getEncoding())) {
             transport = new ModbusASCIITransport();
@@ -130,6 +124,8 @@ public class SerialConnection extends AbstractSerialConnection {
             close();
             return false;
         }
+
+        setConnectionParameters();
 
         inputStream = serialPort.getInputStream();
         outputStream = serialPort.getOutputStream();
