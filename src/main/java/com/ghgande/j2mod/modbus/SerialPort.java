@@ -22,6 +22,8 @@ public interface SerialPort {
     int STOPBITS_1_5 = 3;
     int STOPBITS_2 = 2;
 
+    void init(String deviceName);
+
     String getDeviceName();
 
     void setSerialPortParams(int baudRate, int dataBits, int stopBits, int parity);
