@@ -98,13 +98,6 @@ public class SerialConnection extends AbstractSerialConnection {
             }
         }
 
-        try {
-            serialPort.close();
-        } catch (Exception ignored) {
-        }
-
-        setConnectionParameters();
-
         if (Modbus.SERIAL_ENCODING_ASCII.equals(parameters.getEncoding())) {
             transport = new ModbusASCIITransport();
         } else if (Modbus.SERIAL_ENCODING_RTU.equals(parameters.getEncoding())) {
@@ -131,6 +124,8 @@ public class SerialConnection extends AbstractSerialConnection {
             close();
             return false;
         }
+
+        setConnectionParameters();
 
         inputStream = serialPort.getInputStream();
         outputStream = serialPort.getOutputStream();
