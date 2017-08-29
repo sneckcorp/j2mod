@@ -140,7 +140,7 @@ public class SerialConnection extends AbstractSerialConnection {
         // to original state
 
         if (serialPort != null) {
-            serialPort.setSerialPortParams(parameters.getBaudRate(), parameters.getDatabits(), parameters.getStopbits(), parameters.getParity());
+            serialPort.setSerialPortParams(parameters.getBaudRate(), parameters.getDatabits(), parameters.getStopbits(), parameters.getParity(), timeout);
             serialPort.setFlowControlMode(parameters.getFlowControlIn() | parameters.getFlowControlOut());
         }
     }
@@ -223,7 +223,7 @@ public class SerialConnection extends AbstractSerialConnection {
 
     @Override
     public void setBaudRate(int newBaudRate) {
-        serialPort.setSerialPortParams(newBaudRate, serialPort.getDataBits(), serialPort.getStopBits(), serialPort.getParity());
+        serialPort.setSerialPortParams(newBaudRate, serialPort.getDataBits(), serialPort.getStopBits(), serialPort.getParity(), timeout);
     }
 
     @Override

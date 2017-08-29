@@ -26,8 +26,8 @@ public interface SerialPort {
 
     String getDeviceName();
 
-    void setSerialPortParams(int baudRate, int dataBits, int stopBits, int parity);
-
+    void setSerialPortParams(int baudRate, int dataBits, int stopBits, int parity, int timeout);
+    
     int getBaudRate();
 
     int getDataBits();
